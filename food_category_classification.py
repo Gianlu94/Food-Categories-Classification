@@ -1,31 +1,26 @@
-import os
 import numpy as np
+import os
+
 from keras.preprocessing.image import ImageDataGenerator
-from keras.models import Sequential, Model
-from keras.layers import Dropout, Flatten, Dense, GlobalAveragePooling2D
+from keras.models import Model
+from keras.layers import Dropout, Dense, GlobalAveragePooling2D
 from keras import applications
-from keras import backend as K
-from keras.utils import to_categorical
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras import optimizers
-from keras.utils import multi_gpu_model
-from keras.applications.inception_v3 import InceptionV3
-from keras.preprocessing import image
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from sets import Set
 from sklearn.preprocessing import MultiLabelBinarizer
-from sklearn.model_selection import train_test_split
 import keras.backend as K
-import tensorflow as tf
+
+from utils import build_labels_dict, set_seed
 
 
 def show_acc_history(history):
     plt.clf()
     plt.ylabel('accuracy')
     plt.xlabel('epoch')
-    if TYPE_CLASSIFIER is 'multiclass':
+    if TYPE_CLASSIFIER == 'multiclass':
         plt.plot(history.history['categorical_accuracy'])
         plt.plot(history.history['val_categorical_accuracy'])
     else:
@@ -46,56 +41,36 @@ def show_loss_history(history):
 
 
 def multilabel_flow_from_directory(flow_from_directory_gen):
-
     while True: #keras needs infinite generators
         x, y = next(flow_from_directory_gen)
         classes = np.argmax(y, axis=1)
         labels = []
+        # classes contains current food
         for cl in classes:
+            # for each food gets ingredient
             labels.append(recipe_food_dict[label_map[cl].split("_")[0]])
 
-        labels = np.array(labels)
-        mlb = MultiLabelBinarizer(labels_list)
+        labels = np.array(labels, dtype=object)
+        mlb = MultiLabelBinarizer()
         labels = mlb.fit_transform(labels)
         yield x, labels
-
-
-def build_labels_dict(dataset_path, recipe_food_map_path):
-    print("[INFO] loading labels ...")
-    recipe_food_map = np.genfromtxt(recipe_food_map_path, delimiter="\t", dtype=str)
-    recipe_label = np.genfromtxt(os.path.join(dataset_path, 'label.tsv'), delimiter="_", dtype=str)
-    recipe_ids = recipe_label[:, 0].tolist()
-    recipe_food_dict = {}
-    labels_list = Set([])
-
-    for recipe_food in recipe_food_map:
-        if recipe_food[0] in recipe_food_dict:
-            if recipe_food[0] in recipe_ids:
-                recipe_food_dict[recipe_food[0]].append(recipe_food[2])
-                labels_list.add(recipe_food[2])
-        else:
-            if recipe_food[0] in recipe_ids:
-                recipe_food_dict[recipe_food[0]] = [recipe_food[2]]
-                labels_list.add(recipe_food[2])
-
-    labels_list = list(labels_list)
-    labels_list.sort()
-    return recipe_food_dict, labels_list
 
 
 if __name__=="__main__":
 
     HISTORY_DIR = 'history'
     MODELS_DIR = 'models'
-    DATA_DIR = '/your/local/folder/FFoCat'
+    DATA_DIR = './data/FFoCat'
     RECIPE_FOOD_MAP = os.path.join(DATA_DIR, 'food_food_category_map.tsv')
-    TYPE_CLASSIFIER = 'multilabel' # accepted values only: ['multiclass', 'multilabel'] 
+    TYPE_CLASSIFIER = 'multiclass' # accepted values only: ['multiclass', 'multilabel']
     TRAIN_DIR = os.path.join(DATA_DIR, 'train')
     VALID_DIR = os.path.join(DATA_DIR, 'valid')
     BATCH_SIZE = 16
     EPOCHS = 100
     INIT_LR = 1e-6
     IMG_WIDTH, IMG_HEIGHT = 299, 299  # dimensions of our images
+
+    set_seed()
 
     if K.image_data_format() == 'channels_first':
         input_shape = (3, IMG_WIDTH, IMG_HEIGHT)
@@ -109,7 +84,8 @@ if __name__=="__main__":
     num_valid_steps = num_valid_samples // BATCH_SIZE + 1
 
     recipe_food_dict, labels_list = build_labels_dict(DATA_DIR, RECIPE_FOOD_MAP)
-    print "Number of labels {}".format(len(labels_list))
+
+    print("Number of labels {}".format(len(labels_list)))
 
     # construct the image generator for data augmentation
     train_datagen = ImageDataGenerator(rescale=1./255,
@@ -126,7 +102,8 @@ if __name__=="__main__":
 
     label_map = (train_generator.class_indices)
     label_map = dict((v, k) for k, v in label_map.items())
-    if TYPE_CLASSIFIER is 'multilabel':
+
+    if TYPE_CLASSIFIER == 'multilabel':
         multilabel_train_generator = multilabel_flow_from_directory(train_generator)
         multilabel_validation_generator = multilabel_flow_from_directory(validation_generator)
 
@@ -142,20 +119,21 @@ if __name__=="__main__":
     x = Dropout(0.5)(x)
 
     # and a logistic layer
-    if TYPE_CLASSIFIER is 'multiclass':
+    if TYPE_CLASSIFIER == 'multiclass':
         predictions = Dense(train_generator.num_classes, activation='softmax')(x)
     else:
         predictions = Dense(len(labels_list), activation='sigmoid')(x)
 
     # this is the model we will train
     model = Model(inputs=base_model.input, outputs=predictions)
+    model.summary()
 
     # compile the model using binary cross-entropy rather than categorical cross-entropy -- this may seem counterintuitive for
     # multi-label classification, but keep in mind that the goal here is to treat each output label as an independent Bernoulli distribution
-    if TYPE_CLASSIFIER is 'multiclass':
-        model.compile(optimizer=optimizers.Adam(lr=INIT_LR), loss='categorical_crossentropy', metrics=['categorical_accuracy'])
+    if TYPE_CLASSIFIER == 'multiclass':
+        model.compile(optimizer=optimizers.Adam(learning_rate=INIT_LR), loss='categorical_crossentropy', metrics=['categorical_accuracy'])
     else:
-        model.compile(optimizer=optimizers.Adam(lr=INIT_LR), loss='binary_crossentropy', metrics=['accuracy'])
+        model.compile(optimizer=optimizers.Adam(learning_rate=INIT_LR), loss='binary_crossentropy', metrics=['accuracy'])
     early_stopping = EarlyStopping(patience=15)
 
     checkpointer = ModelCheckpoint(os.path.join(MODELS_DIR, 'inceptionv3_' + TYPE_CLASSIFIER + '_best.h5'), verbose=1, save_best_only=True)
@@ -163,10 +141,10 @@ if __name__=="__main__":
     # train the network
     print("[INFO] training network...")
 
-    if TYPE_CLASSIFIER is 'multiclass':
-        history = model.fit_generator(train_generator, steps_per_epoch=num_train_steps, epochs=EPOCHS, verbose=1, callbacks=[early_stopping, checkpointer], validation_data=validation_generator, validation_steps=num_valid_steps, workers=12, use_multiprocessing=True)
+    if TYPE_CLASSIFIER == 'multiclass':
+        history = model.fit(train_generator, steps_per_epoch=num_train_steps, epochs=EPOCHS, verbose=1, callbacks=[early_stopping, checkpointer], validation_data=validation_generator, validation_steps=num_valid_steps, workers=12, use_multiprocessing=True)
     else:
-        history = model.fit_generator(multilabel_train_generator, steps_per_epoch=num_train_steps, epochs=EPOCHS, verbose=1, callbacks=[early_stopping, checkpointer], validation_data=multilabel_validation_generator, validation_steps=num_valid_steps, workers=12, use_multiprocessing=True)
+        history = model.fit(multilabel_train_generator, steps_per_epoch=num_train_steps, epochs=EPOCHS, verbose=1, callbacks=[early_stopping, checkpointer], validation_data=multilabel_validation_generator, validation_steps=num_valid_steps, workers=12, use_multiprocessing=True)
     model.save(os.path.join(MODELS_DIR, 'inceptionv3_' + TYPE_CLASSIFIER + '_final.h5'))
     show_acc_history(history)
     show_loss_history(history)
