@@ -1,8 +1,10 @@
 import os
 import time
 
+from keras import applications
 from keras.preprocessing.image import ImageDataGenerator
-from keras.models import load_model
+from keras.models import Model
+from keras.layers import Dropout, Dense, GlobalAveragePooling2D
 from keras import backend as K
 import matplotlib.pyplot as plt
 import numpy as np
@@ -18,14 +20,16 @@ def multilabel_flow_from_directory(flow_from_directory_gen, multilabel_getter):
 
 
 def multilabel_getter(y):
+
     classes = np.argmax(y, axis=1)
     labels = []
     for cl in classes:
         labels.append(recipe_food_dict[label_map[cl].split("_")[0]])
 
     labels = np.array(labels)
-    mlb = MultiLabelBinarizer()
+    mlb = MultiLabelBinarizer(classes=labels_list)
     labels = mlb.fit_transform(labels)
+
     return labels
 
 
@@ -36,8 +40,9 @@ def multilabel_scores(y, use_prediction_score):
         labels.append(recipe_food_dict[label_map[cl].split("_")[0]])
 
     labels = np.array(labels)
-    mlb = MultiLabelBinarizer(labels_list)
+    mlb = MultiLabelBinarizer(classes=labels_list)
     labels = mlb.fit_transform(labels)
+
     if use_prediction_score:
         scores = np.max(y, axis=1)
         labels = labels * scores[:, None]
@@ -49,13 +54,13 @@ if __name__ == "__main__":
     MODELS_IMG_DIR = 'models'
     USE_PREDICTION_SCORE = True
     RESULTS_DIR = 'results'
-    TYPE_CLASSIFIER = 'multiclass'  # accepted values only: ['multiclass', 'multilabel']
+    TYPE_CLASSIFIER = 'multiclass' #'multiclass'  # accepted values only: ['multiclass', 'multilabel']
     DATA_DIR = 'data/FFoCat'
     RECIPE_FOOD_MAP = os.path.join(DATA_DIR, 'food_food_category_map.tsv')
     TRAIN_DIR = os.path.join(DATA_DIR, 'train')
     VALID_DIR = os.path.join(DATA_DIR, 'valid')
     IMG_WIDTH, IMG_HEIGHT = 299, 299
-    BATCH_SIZE = 512
+    BATCH_SIZE = 10 #512
 
     set_seed()
 
@@ -85,8 +90,29 @@ if __name__ == "__main__":
     multilabel_validation_generator = multilabel_flow_from_directory(validation_generator, multilabel_getter)
 
     # Evaluate the network
-    print("[INFO] loading models ...")
-    model_img_class = load_model(os.path.join(MODELS_IMG_DIR, 'inceptionv3_' + TYPE_CLASSIFIER + '_best.h5'))
+    #print("[INFO] loading models ...")
+    #model_img_class = load_model(os.path.join(MODELS_IMG_DIR, 'inceptionv3_' + TYPE_CLASSIFIER + '_best.h5'))
+
+    # create the base pre-trained model
+    base_model = applications.inception_v3.InceptionV3(weights='imagenet', include_top=False)
+
+    # add a global spatial average pooling layer
+    x = base_model.output
+    x = GlobalAveragePooling2D()(x)
+
+    # let's add a fully-connected layer
+    x = Dense(2048, activation='relu')(x)
+    x = Dropout(0.5)(x)
+
+    # and a logistic layer
+    if TYPE_CLASSIFIER == 'multiclass':
+        predictions = Dense(train_generator.num_classes, activation='softmax')(x)
+    else:
+        predictions = Dense(len(labels_list), activation='sigmoid')(x)
+
+    # this is the model we will train
+    model = Model(inputs=base_model.input, outputs=predictions)
+    model.summary()
 
     y_true_stack = np.empty((0, len(labels_list)))
     y_pred_multi_class_stack = np.empty((0, len(labels_list)))
@@ -101,7 +127,7 @@ if __name__ == "__main__":
         cnt += 1
         y_true = batch_test[1]
         x_true = batch_test[0]
-        y_pred_img_class = model_img_class.predict(x_true)
+        y_pred_img_class = model.predict(x_true)
 
         if TYPE_CLASSIFIER == "multiclass":
             y_pred_multi_class = multilabel_scores(y_pred_img_class, USE_PREDICTION_SCORE)
@@ -112,12 +138,13 @@ if __name__ == "__main__":
         y_pred_multi_class_stack = np.vstack((y_pred_multi_class_stack, y_pred_multi_class))
         end = time.time()
         print("Time for batch {}/{}: {:.2f} secs".format(cnt, num_valid_steps, end - start))
-
+        break
+        
     precision = dict()
     recall = dict()
     average_precision = dict()
     for i in range(len(labels_list)):
-        precision[i], recall[i], _ = precision_recall_curve(y_true_stack[:, i], y_pred_multi_class_stack[:, i])
+        precision[i], recall[i], thr = precision_recall_curve(y_true_stack[:, i], y_pred_multi_class_stack[:, i])
         average_precision[i] = average_precision_score(y_true_stack[:, i], y_pred_multi_class_stack[:, i])
 
     # A "micro-average": quantifying score on all classes jointly

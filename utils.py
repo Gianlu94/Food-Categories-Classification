@@ -33,6 +33,6 @@ def build_labels_dict(dataset_path, recipe_food_map_path):
                 recipe_food_dict[recipe_food[0]] = [recipe_food[2]]
                 labels_list.append(recipe_food[2])
 
-    labels_list = list(labels_list)
+    labels_list = list(set(labels_list))
     labels_list.sort()
     return recipe_food_dict, labels_list
