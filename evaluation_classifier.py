@@ -1,154 +1,76 @@
-from keras import metrics
-import tensorflow as tf
-import os
-import time
 import numpy as np
-from keras.preprocessing.image import ImageDataGenerator
-from keras.models import Sequential, Model, load_model
-from keras import backend as K
-from sets import Set
-from sklearn.preprocessing import MultiLabelBinarizer
-import tensorflow as tf
-import pdb
-import functools
 from sklearn.metrics import precision_recall_curve
 from sklearn.metrics import average_precision_score
-import matplotlib.pyplot as plt
+import torch
 
 
-def multilabel_flow_from_directory(flow_from_directory_gen, multilabel_getter):
-    for x, y in flow_from_directory_gen:
-        yield x, multilabel_getter(y)
+def get_multilabel_batch(recipe_food_dict, unique_food_class_map, y_batch, y_batch_multilabel):
+    # each batch contains the food classes for each recipe contained in the batch
+    y_batch = [[unique_food_class_map[food] for food in recipe_food_dict[idx_recipe.item()]] for idx_recipe in y_batch]
 
-def multilabel_getter(y):
-    classes = np.argmax(y, axis=1)
-    labels = []
-    for cl in classes:
-        labels.append(recipe_food_dict[label_map[cl].split("_")[0]])
+    for foods_classes_per_recipe in y_batch:
+        y_batch_multilabel[:, foods_classes_per_recipe] = 1
 
-    labels = np.array(labels)
-    mlb = MultiLabelBinarizer(labels_list)
-    labels = mlb.fit_transform(labels)
-    return labels
+    y_batch = y_batch_multilabel.clone()
 
-def multilabel_scores(y, use_prediction_score):
-    classes = np.argmax(y, axis=1)
-    labels = []
-    for cl in classes:
-        labels.append(recipe_food_dict[label_map[cl].split("_")[0]])
+    # reset tensor to zero for the next batch
+    y_batch_multilabel.zero_()
 
-    labels = np.array(labels)
-    mlb = MultiLabelBinarizer(labels_list)
-    labels = mlb.fit_transform(labels)
-    if use_prediction_score:
-        scores = np.max(y, axis=1)
-        labels = labels*scores[:, None]
-    return labels 
+    return y_batch
 
-def build_labels_dict(dataset_path, recipe_food_map_path):
-    print("[INFO] loading labels ...")
-    recipe_food_map = np.genfromtxt(recipe_food_map_path, delimiter="\t", dtype=str)
-    recipe_label = np.genfromtxt(os.path.join(dataset_path, 'label.tsv'), delimiter="_", dtype=str)
-    recipe_ids = recipe_label[:, 0].tolist()
-    recipe_food_dict = {}
-    labels_list = Set([])
 
-    for recipe_food in recipe_food_map:
-        if recipe_food[0] in recipe_food_dict:
-            if recipe_food[0] in recipe_ids:
-                recipe_food_dict[recipe_food[0]].append(recipe_food[2])
-                labels_list.add(recipe_food[2])
-        else:
-            if recipe_food[0] in recipe_ids:
-                recipe_food_dict[recipe_food[0]] = [recipe_food[2]]
-                labels_list.add(recipe_food[2])
+def compute_metrics(data_generator, type_classifier, num_classes, model, recipe_food_dict, unique_food_class_map):
 
-    labels_list = list(labels_list)
-    labels_list.sort()
-    return recipe_food_dict, labels_list
+    print("[INFO] Starting evaluation")
+    model.eval()
 
-if __name__ == "__main__":
+    activation = None
+    y_batch_multilabel = None
 
-    MODELS_IMG_DIR = 'models'
-    USE_PREDICTION_SCORE = True
-    RESULTS_DIR = 'results'
-    TYPE_CLASSIFIER = 'multiclass' # accepted values only: ['multiclass', 'multilabel'] 
-    DATA_DIR = '/your/local/folder/FFoCat'
-    RECIPE_FOOD_MAP = os.path.join(DATA_DIR, 'food_food_category_map.tsv')
-    TRAIN_DIR = os.path.join(DATA_DIR, 'train')
-    VALID_DIR = os.path.join(DATA_DIR, 'valid')
-    IMG_WIDTH, IMG_HEIGHT = 299, 299
-    BATCH_SIZE = 512
-
-    if K.image_data_format() == 'channels_first':
-        input_shape = (3, IMG_WIDTH, IMG_HEIGHT)
+    # chose activation based on the model
+    if type_classifier == "multiclass":
+        activation = torch.nn.Softmax()
     else:
-        input_shape = (IMG_WIDTH, IMG_HEIGHT, 3)
+        activation = torch.nn.Sigmoid()
 
-    num_valid_samples = sum([len(files) for r, d, files in os.walk(VALID_DIR)])
-    num_valid_steps = num_valid_samples // BATCH_SIZE + 1
+    # stack ground truth and prediction vertically
+    y_true_stack = np.empty((0, num_classes))
+    y_pred_stack = np.empty((0, num_classes))
 
-    recipe_food_dict, labels_list = build_labels_dict(DATA_DIR, RECIPE_FOOD_MAP)
+    with torch.no_grad():
+        for idx_batch, (x_batch, y_batch) in enumerate(data_generator):
 
-    # construct the image generator for data augmentation
-    train_datagen = ImageDataGenerator(rescale=1./255)
-    test_datagen = ImageDataGenerator(rescale=1./255)
-    train_generator = train_datagen.flow_from_directory(TRAIN_DIR, target_size=(IMG_WIDTH, IMG_HEIGHT), batch_size=BATCH_SIZE, class_mode='categorical')
-    validation_generator = test_datagen.flow_from_directory(VALID_DIR, target_size=(IMG_WIDTH, IMG_HEIGHT), batch_size=BATCH_SIZE, class_mode='categorical', shuffle=False)
+            y_pred = activation(model(x_batch))
 
-    label_map = train_generator.class_indices
-    label_map = dict((v, k) for k, v in label_map.items())
-    multilabel_validation_generator = multilabel_flow_from_directory(validation_generator, multilabel_getter)
+            if y_batch_multilabel is None:
+                # shape (batch_size, num_classes)
+                y_batch_multilabel = torch.zeros(x_batch.shape[0], num_classes)
+            y_batch = get_multilabel_batch(recipe_food_dict, unique_food_class_map, y_batch, y_batch_multilabel)
 
-    # Evaluate the network
-    print("[INFO] loading models ...")
-    model_img_class = load_model(os.path.join(MODELS_IMG_DIR, 'inceptionv3_' + TYPE_CLASSIFIER + '_best.h5'))
-
-    y_true_stack = np.empty((0, len(labels_list)))
-    y_pred_multi_class_stack = np.empty((0, len(labels_list)))
-    cnt = 0
-    print("[INFO] evaluating network ...")
-    while cnt < num_valid_steps:
-        start = time.time()
-
-        #for batch_test in multilabel_validation_generator:
-        batch_test = next(multilabel_validation_generator)
-
-        cnt += 1
-        y_true = batch_test[1]
-        x_true = batch_test[0]
-        y_pred_img_class = model_img_class.predict(x_true)
-        
-        if TYPE_CLASSIFIER is "multiclass":
-            y_pred_multi_class = multilabel_scores(y_pred_img_class, USE_PREDICTION_SCORE)
-        else:
-            y_pred_multi_class = y_pred_img_class
-
-        y_true_stack = np.vstack((y_true_stack, y_true))
-        y_pred_multi_class_stack = np.vstack((y_pred_multi_class_stack, y_pred_multi_class))
-        end = time.time()
-        print "Time for batch {}/{}: {:.2f} secs".format(cnt, num_valid_steps, end - start)
+            y_true_stack = np.vstack((y_true_stack, y_batch))
+            y_pred_stack = np.vstack((y_pred_stack, y_pred))
+            break
 
     precision = dict()
     recall = dict()
     average_precision = dict()
-    for i in range(len(labels_list)):
-        precision[i], recall[i], _ = precision_recall_curve(y_true_stack[:, i], y_pred_multi_class_stack[:, i])
-        average_precision[i] = average_precision_score(y_true_stack[:, i], y_pred_multi_class_stack[:, i])
 
-    # A "micro-average": quantifying score on all classes jointly
-    precision["micro"], recall["micro"], _ = precision_recall_curve(y_true_stack.ravel(), y_pred_multi_class_stack.ravel())
-    average_precision["micro"] = average_precision_score(y_true_stack, y_pred_multi_class_stack, average="micro")
+    # compute precision, recall, AP per class
+    for i in range(num_classes):
+        precision[i], recall[i], _ = precision_recall_curve(y_true_stack[:, i], y_pred_stack[:, i])
+        average_precision[i] = average_precision_score(y_true_stack[:, i], y_pred_stack[:, i])
+
+    # A "micro-average": quantifying score on all classes jointly (ravel = flattening)
+    precision["micro"], recall["micro"], _ = precision_recall_curve(y_true_stack.ravel(), y_pred_stack.ravel())
+    average_precision["micro"] = average_precision_score(y_true_stack, y_pred_stack, average="micro")
+    # Compute macro-average too
+    average_precision["macro"] = average_precision_score(y_true_stack, y_pred_stack, average="macro")
+
     print('Average precision score, micro-averaged over all classes: {0:0.2f}'.format(100*average_precision["micro"]))
+    print('Average precision score, macro-averaged over all classes: {0:0.2f}'.format(100*average_precision["macro"]))
 
-    plt.figure()
-    np.savetxt('recall_' + TYPE_CLASSIFIER + '.csv', recall['micro'])
-    np.savetxt('precision_' + TYPE_CLASSIFIER + '.csv', precision['micro'])
-    plt.plot(recall['micro'], precision['micro'], color='b')
 
-    plt.xlabel('Recall')
-    plt.ylabel('Precision')
-    plt.ylim([0.0, 1.05])
-    plt.xlim([0.0, 1.0])
-    plt.title('Average precision score, micro-averaged over all classes: AP={0:0.2f}'.format(100*average_precision["micro"]))
-    plt.savefig(os.path.join(RESULTS_DIR, 'AP_' + TYPE_CLASSIFIER + '.png'))
+if __name__ == "__main__":
+    # load model and evalute it
+    pass
+

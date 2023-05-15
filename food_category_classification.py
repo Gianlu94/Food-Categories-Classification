@@ -1,63 +1,35 @@
-import os
+import argparse
 import numpy as np
-from keras.preprocessing.image import ImageDataGenerator
-from keras.models import Sequential, Model
-from keras.layers import Dropout, Flatten, Dense, GlobalAveragePooling2D
-from keras import applications
-from keras import backend as K
-from keras.utils import to_categorical
-from keras.callbacks import EarlyStopping, ModelCheckpoint
-from keras import optimizers
-from keras.utils import multi_gpu_model
-from keras.applications.inception_v3 import InceptionV3
-from keras.preprocessing import image
+import os
+
 import matplotlib
 matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-from sets import Set
-from sklearn.preprocessing import MultiLabelBinarizer
-from sklearn.model_selection import train_test_split
-import keras.backend as K
-import tensorflow as tf
+
+import torch
+import torch.optim as optim
+from torch.utils.data import DataLoader
+import torchvision
+import wandb
+
+from data.data import preprocess_data, create_val_set
+from evaluation_classifier import compute_metrics
+from models.model import initialize_model, eval_model
+from utils import create_dirs, EarlyStopping, set_seed
 
 
-def show_acc_history(history):
-    plt.clf()
-    plt.ylabel('accuracy')
-    plt.xlabel('epoch')
-    if TYPE_CLASSIFIER is 'multiclass':
-        plt.plot(history.history['categorical_accuracy'])
-        plt.plot(history.history['val_categorical_accuracy'])
-    else:
-        plt.plot(history.history['acc'])
-        plt.plot(history.history['val_acc'])
-    plt.legend(['train_accuracy', 'test_accuracy'], loc='best')
-    plt.savefig(os.path.join(HISTORY_DIR, 'acc_inceptionv3_' + TYPE_CLASSIFIER + '.png'))
+def get_multilabel_batch(recipe_food_dict, unique_food_class_map, y_batch, y_batch_multilabel):
+    # each batch contains the food classes for each recipe contained in the batch
+    y_batch = [[unique_food_class_map[food] for food in recipe_food_dict[idx_recipe.item()]] for idx_recipe in y_batch]
 
+    for foods_classes_per_recipe in y_batch:
+        y_batch_multilabel[:, foods_classes_per_recipe] = 1
 
-def show_loss_history(history):
-    plt.clf()
-    plt.plot(history.history['loss'])
-    plt.plot(history.history['val_loss'])
-    plt.ylabel('loss')
-    plt.xlabel('epoch')
-    plt.legend(['train_loss', 'test_loss'], loc='best')
-    plt.savefig(os.path.join(HISTORY_DIR, 'loss_inceptionv3_' + TYPE_CLASSIFIER + '.png'))
+    y_batch = y_batch_multilabel.clone()
 
+    # reset tensor to zero for the next batch
+    y_batch_multilabel.zero_()
 
-def multilabel_flow_from_directory(flow_from_directory_gen):
-
-    while True: #keras needs infinite generators
-        x, y = next(flow_from_directory_gen)
-        classes = np.argmax(y, axis=1)
-        labels = []
-        for cl in classes:
-            labels.append(recipe_food_dict[label_map[cl].split("_")[0]])
-
-        labels = np.array(labels)
-        mlb = MultiLabelBinarizer(labels_list)
-        labels = mlb.fit_transform(labels)
-        yield x, labels
+    return y_batch
 
 
 def build_labels_dict(dataset_path, recipe_food_map_path):
@@ -66,107 +38,173 @@ def build_labels_dict(dataset_path, recipe_food_map_path):
     recipe_label = np.genfromtxt(os.path.join(dataset_path, 'label.tsv'), delimiter="_", dtype=str)
     recipe_ids = recipe_label[:, 0].tolist()
     recipe_food_dict = {}
-    labels_list = Set([])
+    labels_list = []
 
     for recipe_food in recipe_food_map:
         if recipe_food[0] in recipe_food_dict:
             if recipe_food[0] in recipe_ids:
                 recipe_food_dict[recipe_food[0]].append(recipe_food[2])
-                labels_list.add(recipe_food[2])
+                labels_list.append(recipe_food[2])
         else:
             if recipe_food[0] in recipe_ids:
                 recipe_food_dict[recipe_food[0]] = [recipe_food[2]]
-                labels_list.add(recipe_food[2])
+                labels_list.append(recipe_food[2])
 
-    labels_list = list(labels_list)
+    labels_list = list(set(labels_list))
     labels_list.sort()
     return recipe_food_dict, labels_list
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
-    HISTORY_DIR = 'history'
-    MODELS_DIR = 'models'
-    DATA_DIR = '/your/local/folder/FFoCat'
-    RECIPE_FOOD_MAP = os.path.join(DATA_DIR, 'food_food_category_map.tsv')
-    TYPE_CLASSIFIER = 'multilabel' # accepted values only: ['multiclass', 'multilabel'] 
-    TRAIN_DIR = os.path.join(DATA_DIR, 'train')
-    VALID_DIR = os.path.join(DATA_DIR, 'valid')
-    BATCH_SIZE = 16
-    EPOCHS = 100
-    INIT_LR = 1e-6
-    IMG_WIDTH, IMG_HEIGHT = 299, 299  # dimensions of our images
+    parser = argparse.ArgumentParser(prog='Food train', description='Arguments related to training')
 
-    if K.image_data_format() == 'channels_first':
-        input_shape = (3, IMG_WIDTH, IMG_HEIGHT)
+    parser.add_argument("-seed", type=int, default=0)
+    parser.add_argument("-data_dir", type=str, default="./data/FFoCat")
+    parser.add_argument("-models_path", type=str, default="./models/")
+    parser.add_argument("-model_name", type=str, default="EFFICIENTNETB0")
+    parser.add_argument("-results_path", type=str, default="./results/")
+    parser.add_argument("-type_classifier", type=str, default="multilabel", help="accepted values only: ['multiclass', 'multilabel']")
+    parser.add_argument("-batch_size", type=int, default=16)
+    parser.add_argument("-epochs", type=int, default=5)
+    parser.add_argument("-learning_rate", type=float, default=1e-6)
+    parser.add_argument("-patience", type=int, default=1)
+
+    args = parser.parse_args()
+
+    seed = args.seed
+    data_dir = args.data_dir
+    models_path = args.models_path
+    model_name = args.model_name
+    results_path = args.results_path
+    type_classifier = args.type_classifier
+    batch_size = args.batch_size
+    epochs = args.epochs
+    learning_rate = args.learning_rate
+    patience = args.patience
+
+    set_seed(seed)
+
+    print("Setting device {}".format(device))
+    print("Setting seed {}".format(seed))
+
+    create_val_set(data_dir)
+
+    recipe_food_map = os.path.join(data_dir, 'food_food_category_map.tsv')
+    train_dir = os.path.join(data_dir, 'train')
+    valid_dir = os.path.join(data_dir, 'valid')
+    test_dir = os.path.join(data_dir, 'test')
+
+    current_model_dir, current_save_dirs, exp_name = create_dirs(models_path, results_path, seed)
+    recipe_food_dict, labels_list = build_labels_dict(data_dir, recipe_food_map)
+    recipe_food_dict = {idx: ingredients for idx, ingredients in enumerate(recipe_food_dict.values())}
+
+    # wandb.init(
+    #     name=exp_name,
+    #
+    #     # set the wandb project of this run
+    #     project="food-project",
+    #
+    #     # track hyperparameters
+    #     config={
+    #         "seed": seed,
+    #         "batch_size": batch_size,
+    #         "learning_rate": learning_rate,
+    #         "epochs": epochs,
+    #         "patience": patience,
+    #         "model": model_name,
+    #         "type_classifier": type_classifier,
+    #     }
+    # )
+
+    if type_classifier == "multiclass":
+        num_classes = len(recipe_food_dict)
+        loss_function = torch.nn.CrossEntropyLoss()
+    elif type_classifier == "multilabel":
+        num_classes = len(labels_list)
+        loss_function = torch.nn.BCEWithLogitsLoss()
     else:
-        input_shape = (IMG_WIDTH, IMG_HEIGHT, 3)
+        print("ERROR: {} -- wrong classifier specified".format(type_classifier))
 
-    num_train_samples = sum([len(files) for r, d, files in os.walk(TRAIN_DIR)])
-    num_valid_samples = sum([len(files) for r, d, files in os.walk(VALID_DIR)])
+    # map each food to a unique integer id
+    unique_food_class_map = {food: idx for idx, food in enumerate(labels_list)}
+    # batch used later to evaluate foods
+    y_batch_multilabel = torch.zeros(batch_size, len(labels_list))
 
-    num_train_steps = num_train_samples // BATCH_SIZE + 1
-    num_valid_steps = num_valid_samples // BATCH_SIZE + 1
+    print("Number of labels {}".format(num_classes))
 
-    recipe_food_dict, labels_list = build_labels_dict(DATA_DIR, RECIPE_FOOD_MAP)
-    print "Number of labels {}".format(len(labels_list))
+    # preprocessing data
+    transform = preprocess_data(model_name)
 
-    # construct the image generator for data augmentation
-    train_datagen = ImageDataGenerator(rescale=1./255,
-                                       rotation_range=25,
-                                       width_shift_range=0.1,
-                                       height_shift_range=0.1,
-                                       shear_range=0.2,
-                                       zoom_range=0.2,
-                                       horizontal_flip=True,
-                                       fill_mode="nearest")
-    test_datagen = ImageDataGenerator(rescale=1./255)
-    train_generator = train_datagen.flow_from_directory(TRAIN_DIR, target_size=(IMG_WIDTH, IMG_HEIGHT), batch_size=BATCH_SIZE, class_mode='categorical')
-    validation_generator = test_datagen.flow_from_directory(VALID_DIR, target_size=(IMG_WIDTH, IMG_HEIGHT), batch_size=BATCH_SIZE, class_mode='categorical')
+    # create generetor and data loaders
+    train_generator = torchvision.datasets.ImageFolder(train_dir, transform=transform)
+    validation_generator = torchvision.datasets.ImageFolder(valid_dir, transform=transform)
+    test_generator = torchvision.datasets.ImageFolder(test_dir, transform=transform)
 
-    label_map = (train_generator.class_indices)
-    label_map = dict((v, k) for k, v in label_map.items())
-    if TYPE_CLASSIFIER is 'multilabel':
-        multilabel_train_generator = multilabel_flow_from_directory(train_generator)
-        multilabel_validation_generator = multilabel_flow_from_directory(validation_generator)
+    train_loader = DataLoader(train_generator, batch_size=batch_size, shuffle=True)
+    validation_loader = DataLoader(validation_generator, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_generator, batch_size=batch_size, shuffle=True)
 
-    # create the base pre-trained model
-    base_model = applications.inception_v3.InceptionV3(weights='imagenet', include_top=False)
+    num_train_batches = len(train_loader)
 
-    # add a global spatial average pooling layer
-    x = base_model.output
-    x = GlobalAveragePooling2D()(x)
+    input_size, model = initialize_model(model_name, num_classes)
 
-    # let's add a fully-connected layer
-    x = Dense(2048, activation='relu')(x)
-    x = Dropout(0.5)(x)
+    # model to GPU or CPU
+    model = model.to(device)
 
-    # and a logistic layer
-    if TYPE_CLASSIFIER is 'multiclass':
-        predictions = Dense(train_generator.num_classes, activation='softmax')(x)
-    else:
-        predictions = Dense(len(labels_list), activation='sigmoid')(x)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-    # this is the model we will train
-    model = Model(inputs=base_model.input, outputs=predictions)
+    earlystopping = EarlyStopping(current_model_dir, patience)
 
-    # compile the model using binary cross-entropy rather than categorical cross-entropy -- this may seem counterintuitive for
-    # multi-label classification, but keep in mind that the goal here is to treat each output label as an independent Bernoulli distribution
-    if TYPE_CLASSIFIER is 'multiclass':
-        model.compile(optimizer=optimizers.Adam(lr=INIT_LR), loss='categorical_crossentropy', metrics=['categorical_accuracy'])
-    else:
-        model.compile(optimizer=optimizers.Adam(lr=INIT_LR), loss='binary_crossentropy', metrics=['accuracy'])
-    early_stopping = EarlyStopping(patience=15)
+    for epoch in range(1, epochs+1):
+        print('Epoch {}/{}'.format(epoch, epochs))
+        print('-' * 20)
 
-    checkpointer = ModelCheckpoint(os.path.join(MODELS_DIR, 'inceptionv3_' + TYPE_CLASSIFIER + '_best.h5'), verbose=1, save_best_only=True)
+        model.train()
 
-    # train the network
-    print("[INFO] training network...")
+        train_loss = 0.
+        for idx_batch, (x_batch, y_batch) in enumerate(train_loader):
 
-    if TYPE_CLASSIFIER is 'multiclass':
-        history = model.fit_generator(train_generator, steps_per_epoch=num_train_steps, epochs=EPOCHS, verbose=1, callbacks=[early_stopping, checkpointer], validation_data=validation_generator, validation_steps=num_valid_steps, workers=12, use_multiprocessing=True)
-    else:
-        history = model.fit_generator(multilabel_train_generator, steps_per_epoch=num_train_steps, epochs=EPOCHS, verbose=1, callbacks=[early_stopping, checkpointer], validation_data=multilabel_validation_generator, validation_steps=num_valid_steps, workers=12, use_multiprocessing=True)
-    model.save(os.path.join(MODELS_DIR, 'inceptionv3_' + TYPE_CLASSIFIER + '_final.h5'))
-    show_acc_history(history)
-    show_loss_history(history)
+            if type_classifier == "multilabel":
+                # todo: change this
+                y_batch = get_multilabel_batch(recipe_food_dict, unique_food_class_map, y_batch, y_batch_multilabel)
+
+            x_batch, y_batch = x_batch.to(device), y_batch.to(device)
+
+            optimizer.zero_grad()
+
+            accumulated_loss = 0.
+
+            outputs = model(x_batch)
+            batch_loss = loss_function(outputs, y_batch)
+            train_loss += batch_loss.item()
+
+            batch_loss.backward()
+            optimizer.step()
+
+            print("Batch {}/{} --- loss = {:.3f}".format(idx_batch+1, num_train_batches, batch_loss))
+            break
+
+        if type_classifier == "multiclass":
+            val_loss = eval_model(model, loss_function, validation_loader, type_classifier, y_batch_multilabel)
+        else:
+            val_loss = eval_model(
+                model, loss_function, validation_loader, type_classifier, y_batch_multilabel,
+                recipe_food_dict, unique_food_class_map
+            )
+
+        print('-' * 20)
+        print("END EPOCH {} --- TRAIN LOSS = {:.3f} -- VAL LOSS = {:.3f}".format(
+            epoch, train_loss, val_loss))
+        print('-' * 20 + "\n")
+
+        #wandb.log({"train-loss": train_loss, "val-loss": val_loss})
+
+        earlystopping(epoch, val_loss, model)
+        if earlystopping.earlystop:
+            print("Early stopping at epoch {}".format(epoch))
+            break
+
+    compute_metrics(test_loader, type_classifier, num_classes, model, recipe_food_dict, unique_food_class_map)
+    # wandb.finish()
