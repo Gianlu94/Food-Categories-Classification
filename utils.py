@@ -4,10 +4,15 @@ import random
 import numpy as np
 import torch
 
-from models.model import save_model
-
+import config
+from model import save_model
 
 def set_seed(seed):
+    """
+        It sets the seed for reproducible exps
+    :param seed:
+    :return:
+    """
     random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
@@ -16,50 +21,38 @@ def set_seed(seed):
     np.random.seed(seed)
 
 
-def create_dirs(model_dir, results_dir,  seed):
-    """Create dir to save model and results"""
-
-    if not os.path.exists(model_dir):
-        os.makedirs(model_dir, exist_ok=True)
-    if not os.path.exists(results_dir):
-        os.makedirs(results_dir, exist_ok=True)
-
-    exp_num = len(os.listdir(results_dir))
-
-    exp_name = "exp-{}_seed-{}/".format(exp_num, seed)
-    current_model_dir = model_dir + exp_name
-    current_results_dir = results_dir + exp_name
-
-    os.makedirs(current_model_dir)
-    os.makedirs(current_results_dir)
-
-    return current_model_dir, current_results_dir, exp_name
+def load_config(type_classifier, num_conf):
+    if type_classifier == "multilabel":
+        if num_conf == 0:
+            print("-Loading config: CONF_MULTILABEL_0")
+            return config.CONF_MULTILABEL_0
+    elif type_classifier == "multiclass":
+        if num_conf == 0:
+            print("-Loading config: CONF_MULTICLASS_0")
+            return config.CONF_MULTICLASS_0
 
 
-class EarlyStopping:
+def create_dirs(model_dir, results_dir, type_classifier, seed):
+    """
+        Create dir to save model and results of the current exp
+    """
 
-    def __init__(self, model_dir, patience=5):
+    exp_model_dir = model_dir + "/{}/seed-{}/".format(type_classifier, seed)
+    exp_results_dir = results_dir + "/{}/seed-{}/".format(type_classifier, seed)
 
-        self.model_dir = model_dir
-        self.patience = patience
-        self.min_loss = None
-        self.counter = 0
-        self.earlystop = False
+    if not os.path.exists(exp_model_dir):
+        os.makedirs(exp_model_dir, exist_ok=True)
+    if not os.path.exists(exp_results_dir):
+        os.makedirs(exp_results_dir, exist_ok=True)
 
-    def __call__(self, epoch, val_loss, model):
+    exp_num = len(os.listdir(exp_model_dir))
 
-        if self.min_loss is None:
-            self.save_ckp(epoch, val_loss, model)
-        elif val_loss < self.min_loss:
-            self.counter = 0
-            self.save_ckp(epoch, val_loss, model)
-        else:
-            self.counter += 1
-            print("Earlystopping counter -- {}/{}".format(self.counter, self.patience))
+    exp_name = "exp-{}/".format(exp_num)
+    exp_model_dir += exp_name
+    exp_results_dir += exp_name
 
-            if self.counter >= self.patience:
-                self.earlystop = True
+    os.makedirs(exp_model_dir, exist_ok=True)
+    os.makedirs(exp_results_dir, exist_ok=True)
 
-    def save_ckp(self, epoch, val_loss, model):
-        self.min_loss = val_loss
-        save_model(model, self.model_dir + "model-ep{}.pt".format(epoch))
+    exp_name = "seed-{}_exp-{}/".format(seed, exp_num)
+    return exp_model_dir, exp_results_dir, exp_name
