@@ -16,8 +16,8 @@ def get_multilabel_batch(recipe_food_dict, unique_food_class_map, y_batch, y_bat
     # each batch contains the food classes for each recipe contained in the batch
     y_batch = [[unique_food_class_map[food] for food in recipe_food_dict[idx_recipe.item()]] for idx_recipe in y_batch]
 
-    for foods_classes_per_recipe in y_batch:
-        y_batch_multilabel[:, foods_classes_per_recipe] = 1
+    for idx, foods_classes_per_recipe in enumerate(y_batch):
+        y_batch_multilabel[idx, foods_classes_per_recipe] = 1
 
     y_batch = y_batch_multilabel.clone()
 
@@ -65,13 +65,13 @@ def train(
         for idx_batch, (x_batch, y_batch) in enumerate(train_loader):
 
             if type_classifier == "multilabel":
+                # y_batch contains classes of recipes so, we have to change it to contains classes of foods
                 # todo: change this
                 y_batch = get_multilabel_batch(recipe_food_dict, unique_food_class_map, y_batch, y_batch_multilabel)
 
             x_batch, y_batch = x_batch.to(device), y_batch.to(device)
 
             optimizer.zero_grad()
-
             outputs = model(x_batch)
             batch_loss = loss_function(outputs, y_batch)
             train_loss += batch_loss.item()
@@ -80,7 +80,7 @@ def train(
             optimizer.step()
 
             print("Batch {}/{} --- loss = {:.3f}".format(idx_batch + 1, num_train_batches, batch_loss))
-            break
+            #break
 
         if type_classifier == "multiclass":
             val_loss = eval_model(model, loss_function, validation_loader, type_classifier, y_batch_multilabel)
@@ -187,7 +187,7 @@ def eval_model(
 
             outputs = model(x_batch)
             test_loss += loss_function(outputs, y_batch)
-            break
+            #break
     return test_loss/len(test_loader)
 
 

@@ -2,22 +2,20 @@ import argparse
 import numpy as np
 import os
 
-import matplotlib
-matplotlib.use('Agg')
 import pickle
 import torch
 
 from data.data import create_val_set
 from model import tuning_hps
 from utils import create_dirs, load_config, set_seed
-import wandb
+
 
 def get_multilabel_batch(recipe_food_dict, unique_food_class_map, y_batch, y_batch_multilabel):
     # each batch contains the food classes for each recipe contained in the batch
     y_batch = [[unique_food_class_map[food] for food in recipe_food_dict[idx_recipe.item()]] for idx_recipe in y_batch]
 
-    for foods_classes_per_recipe in y_batch:
-        y_batch_multilabel[:, foods_classes_per_recipe] = 1
+    for idx, foods_classes_per_recipe in enumerate(y_batch):
+        y_batch_multilabel[idx, foods_classes_per_recipe] = 1
 
     y_batch = y_batch_multilabel.clone()
 

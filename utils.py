@@ -47,7 +47,7 @@ def create_dirs(model_dir, results_dir, type_classifier, seed):
 
     exp_num = len(os.listdir(exp_model_dir))
 
-    exp_name = "exp-{}/".format(exp_num)
+    exp_name = type_classifier + "/exp-{}/".format(exp_num)
     exp_model_dir += exp_name
     exp_results_dir += exp_name
 
