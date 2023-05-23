@@ -83,10 +83,10 @@ def train(
             #break
 
         if type_classifier == "multiclass":
-            val_loss = eval_model(model, loss_function, validation_loader, type_classifier, y_batch_multilabel)
+            val_loss = eval_model(model, loss_function, validation_loader, type_classifier, y_batch_multilabel, device)
         else:
             val_loss = eval_model(
-                model, loss_function, validation_loader, type_classifier, y_batch_multilabel,
+                model, loss_function, validation_loader, type_classifier, y_batch_multilabel, device,
                 recipe_food_dict, unique_food_class_map
             )
 
@@ -173,7 +173,7 @@ def tuning_hps(device, exp_name, type_classifier, recipe_food_dict, labels_list,
 
 
 def eval_model(
-        model, loss_function, test_loader, type_classifier, y_batch_multilabel,  recipe_food_dict=None,
+        model, loss_function, test_loader, type_classifier, y_batch_multilabel, device,  recipe_food_dict=None,
         unique_food_class_map=None):
 
     model.eval()
@@ -185,6 +185,7 @@ def eval_model(
             if type_classifier == "multilabel":
                 y_batch = get_multilabel_batch(recipe_food_dict, unique_food_class_map, y_batch, y_batch_multilabel)
 
+            x_batch, y_batch = x_batch.to(device), y_batch.to(device)
             outputs = model(x_batch)
             test_loss += loss_function(outputs, y_batch)
             #break
