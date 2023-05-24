@@ -1,5 +1,6 @@
 import datetime
 import os
+from tqdm import tqdm
 
 import torch
 import torch.optim as optim
@@ -80,13 +81,13 @@ def train(
             optimizer.step()
 
             print("Batch {}/{} --- loss = {:.3f}".format(idx_batch + 1, num_train_batches, batch_loss))
-            #break
+            break
 
         if type_classifier == "multiclass":
-            val_loss = eval_model(model, loss_function, validation_loader, type_classifier, y_batch_multilabel, device)
+            val_loss = eval_model(model, loss_function, validation_loader, type_classifier, device)
         else:
             val_loss = eval_model(
-                model, loss_function, validation_loader, type_classifier, y_batch_multilabel, device,
+                model, loss_function, validation_loader, type_classifier, device,
                 recipe_food_dict, unique_food_class_map
             )
 
@@ -173,15 +174,16 @@ def tuning_hps(device, exp_name, type_classifier, recipe_food_dict, labels_list,
 
 
 def eval_model(
-        model, loss_function, test_loader, type_classifier, y_batch_multilabel, device,  recipe_food_dict=None,
+        model, loss_function, test_loader, type_classifier, device,  recipe_food_dict=None,
         unique_food_class_map=None):
 
     model.eval()
 
     test_loss = 0.
+    y_batch_multilabel = torch.zeros((1, len(unique_food_class_map)))
 
     with torch.no_grad():
-        for x_batch, y_batch in test_loader:
+        for x_batch, y_batch in tqdm(test_loader, desc="Evaluation on validations set"):
             if type_classifier == "multilabel":
                 y_batch = get_multilabel_batch(recipe_food_dict, unique_food_class_map, y_batch, y_batch_multilabel)
 

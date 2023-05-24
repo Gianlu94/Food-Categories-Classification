@@ -1,4 +1,5 @@
 import argparse
+from tqdm import tqdm
 import os
 
 import matplotlib.pyplot as plt
@@ -62,7 +63,7 @@ def compute_metrics(data_generator, num_classes, type_classifier, model, plot_pa
     y_pred_new = None
 
     with torch.no_grad():
-        for idx_batch, (x_batch, y_batch) in enumerate(data_generator):
+        for idx_batch, (x_batch, y_batch) in enumerate(tqdm(data_generator, desc="Evaluating classifier")):
             x_batch, y_batch = x_batch.to(device), y_batch.to(device)
             y_pred = activation(model(x_batch))
 
