@@ -1,4 +1,5 @@
 import os
+import platform
 import random
 
 import numpy as np
@@ -47,12 +48,14 @@ def create_dirs(model_dir, results_dir, type_classifier, seed):
 
     exp_num = len(os.listdir(exp_model_dir))
 
-    exp_name = type_classifier + "/exp-{}/".format(exp_num)
+    node = platform.uname()[1]
+    exp_name = type_classifier + "/exp-{}-{}/".format(exp_num, node)
     exp_model_dir += exp_name
     exp_results_dir += exp_name
 
     os.makedirs(exp_model_dir, exist_ok=True)
     os.makedirs(exp_results_dir, exist_ok=True)
 
-    exp_name = "seed-{}_exp-{}/".format(seed, exp_num)
+    exp_name = type_classifier + "/seed-{}/exp-{}-{}/".format(seed, exp_num, node)
+
     return exp_model_dir, exp_results_dir, exp_name

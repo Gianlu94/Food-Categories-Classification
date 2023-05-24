@@ -125,7 +125,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='Food test', description="")
 
     parser.add_argument("-data_dir", type=str, default="./data/FFoCat")
-    parser.add_argument("-models_path", type=str, default="./models")
+    parser.add_argument("-model_path", type=str, default="./models")
     parser.add_argument("-plot_path", type=str, default="./results/plot/")
     parser.add_argument("-model_name", type=str, default="EFFICIENTNETB0")
     parser.add_argument("-type_classifier", type=str, default="multilabel", help="accepted values only: ['multiclass', 'multilabel']")

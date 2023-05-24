@@ -128,7 +128,7 @@ def tuning_hps(device, exp_name, type_classifier, recipe_food_dict, labels_list,
     transform = preprocess_data(model_name)
 
     def tune():
-        with wandb.init(name=exp_name+str(datetime.datetime.now().timestamp())):
+        with wandb.init(name=exp_name):
             config = wandb.config
             epochs = config.epochs
             learning_rate = config.learning_rate
@@ -190,7 +190,7 @@ def eval_model(
             x_batch, y_batch = x_batch.to(device), y_batch.to(device)
             outputs = model(x_batch)
             test_loss += loss_function(outputs, y_batch)
-            #break
+            break
     return test_loss/len(test_loader)
 
 
@@ -226,9 +226,19 @@ class EarlyStopping:
             if self.counter >= self.patience:
                 self.earlystop = True
 
+    def delete_previous_models(self):
+        list_of_models = os.listdir(self.model_dir)
+
+        for model in list_of_models:
+            os.remove(self.model_dir + model)
+
     def save_ckp(self, epoch, val_loss, model):
         self.best_epoch = epoch
         self.min_loss = val_loss
+
+        #keep only the best model
+        self.delete_previous_models()
+
         save_model(model, self.model_dir + "model-ep{}.pt".format(epoch))
 
 
