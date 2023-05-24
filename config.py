@@ -1,5 +1,5 @@
-epochs = 2
-bs_values = 1 #[64, 128, 256]
+epochs = 100
+bs_values = 16 #[64, 128, 256]
 lr_values = [0.0001, 0.001, 0.01]
 
 # CONFIGURATION FOR HYPERPARAMETERS TUNING

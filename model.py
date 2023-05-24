@@ -140,8 +140,8 @@ def tuning_hps(device, exp_name, type_classifier, recipe_food_dict, labels_list,
             train_generator = torchvision.datasets.ImageFolder(train_dir, transform=transform)
             validation_generator = torchvision.datasets.ImageFolder(valid_dir, transform=transform)
 
-            train_loader = DataLoader(train_generator, batch_size=batch_size, shuffle=True)
-            validation_loader = DataLoader(validation_generator, batch_size=batch_size, shuffle=True)
+            train_loader = DataLoader(train_generator, batch_size=batch_size, shuffle=True, drop_last=True)
+            validation_loader = DataLoader(validation_generator, batch_size=1)
 
             # batch used later to evaluate foods
             y_batch_multilabel = torch.zeros((batch_size, len(labels_list)))

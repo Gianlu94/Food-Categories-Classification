@@ -92,7 +92,7 @@ def compute_metrics(data_generator, num_classes, type_classifier, model, plot_pa
 
             y_true_stack = np.vstack((y_true_stack, y_batch))
 
-            break
+            #break
 
     precision = dict()
     recall = dict()
@@ -129,7 +129,7 @@ if __name__ == "__main__":
     parser.add_argument("-model_name", type=str, default="EFFICIENTNETB0")
     parser.add_argument("-type_classifier", type=str, default="multilabel", help="accepted values only: ['multiclass', 'multilabel']")
     parser.add_argument("-split", type=str, default="test")
-    parser.add_argument("-batch_size", type=int, default=2)
+    parser.add_argument("-batch_size", type=int, default=1)
 
     args = parser.parse_args()
 
