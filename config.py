@@ -9,7 +9,7 @@ CONF_MULTILABEL_0 = {
     "metric": {"goal": "minimize", "name": "val-loss"},
     "parameters": {
         "epochs": {"value": epochs},
-        "batch_size": {"value": bs_values},
+        "batch_size": {"values": bs_values},
         "learning_rate": {"values": lr_values},
     }
 }
@@ -20,7 +20,7 @@ CONF_MULTICLASS_0 = {
     "metric": {"goal": "minimize", "name": "val-loss"},
     "parameters": {
         "epochs": {"value": epochs},
-        "batch_size": {"value": bs_values},
+        "batch_size": {"values": bs_values},
         "learning_rate": {"values": lr_values},
     }
 }
