@@ -81,7 +81,7 @@ def train(
             optimizer.step()
 
             print("Batch {}/{} --- loss = {:.3f}".format(idx_batch + 1, num_train_batches, batch_loss))
-            break
+            #break
 
         if type_classifier == "multiclass":
             val_loss = eval_model(model, loss_function, validation_loader, type_classifier, device)
@@ -91,6 +91,7 @@ def train(
                 recipe_food_dict, unique_food_class_map
             )
 
+        train_loss /= num_train_batches
         print('-' * 20)
         print("END EPOCH {} --- TRAIN LOSS = {:.3f} -- VAL LOSS = {:.3f}".format(
             epoch, train_loss, val_loss))
@@ -180,17 +181,17 @@ def eval_model(
     model.eval()
 
     test_loss = 0.
-    y_batch_multilabel = torch.zeros((1, len(unique_food_class_map)))
 
     with torch.no_grad():
         for x_batch, y_batch in tqdm(test_loader, desc="Evaluation on validations set"):
             if type_classifier == "multilabel":
+                y_batch_multilabel = torch.zeros((1, len(unique_food_class_map)))
                 y_batch = get_multilabel_batch(recipe_food_dict, unique_food_class_map, y_batch, y_batch_multilabel)
 
             x_batch, y_batch = x_batch.to(device), y_batch.to(device)
             outputs = model(x_batch)
             test_loss += loss_function(outputs, y_batch)
-            break
+            #break
     return test_loss/len(test_loader)
 
 
