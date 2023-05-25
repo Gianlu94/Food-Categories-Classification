@@ -1,6 +1,6 @@
 epochs = 100
-bs_values = 16 #[64, 128, 256]
-lr_values = [0.0001, 0.001, 0.01]
+bs_values = [16, 32, 48] #[64, 128, 256]
+lr_values = [0.000001, 0.0001,  0.01]
 
 # CONFIGURATION FOR HYPERPARAMETERS TUNING
 # config for multilabel
