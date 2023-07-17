@@ -1,8 +1,32 @@
 import os
 import random
 
+import numpy as np
+
 import shutil
 from torchvision import transforms
+
+
+def inverse_transorm_img(model_name, unnormalized_img):
+    """
+
+        Inverse transformation of img
+
+        :param model_name: name of the model to use for exp
+        :param unnormalized_img: unnormalized img
+
+        :return denormalized_img: denormalize img
+
+    """
+
+    # ( C X W X H ) --> ( W X H X C )
+    unnormalized_img = np.transpose(unnormalized_img, (1, 2, 0))
+
+    if "EFFICIENTNET" in model_name:
+
+        denormalized_img = (unnormalized_img * [0.229, 0.224, 0.225]) + [0.485, 0.456, 0.406]
+
+        return denormalized_img
 
 
 def preprocess_data(model_name):
