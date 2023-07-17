@@ -10,42 +10,50 @@ from model import tuning_hps
 from utils import create_dirs, load_config, set_seed
 
 
-def get_multilabel_batch(recipe_food_dict, unique_food_class_map, y_batch, y_batch_multilabel):
-    # each batch contains the food classes for each recipe contained in the batch
-    y_batch = [[unique_food_class_map[food] for food in recipe_food_dict[idx_recipe.item()]] for idx_recipe in y_batch]
-
-    for idx, foods_classes_per_recipe in enumerate(y_batch):
-        y_batch_multilabel[idx, foods_classes_per_recipe] = 1
-
-    y_batch = y_batch_multilabel.clone()
-
-    # reset tensor to zero for the next batch
-    y_batch_multilabel.zero_()
-
-    return y_batch
-
-
 def build_labels_dict(dataset_path, recipe_food_map_path):
-    print("[INFO] loading labels ...")
+    """
+        Create a map tha contains for each recipe all its foods
+
+        :param dataset_path: path to the dataset
+        :param recipe_food_map_path: path to the file containing recipe and foods
+
+        :return:
+            - recipe_food_dict: a dict {id_recipe, list_of_foods}
+            - foods_list: list of unique foods (i.e., no duplicates)
+    """
+
+    print("\n[INFO] Loading labels ...")
+    # this contains for each recipe the corresponding foods
     recipe_food_map = np.genfromtxt(recipe_food_map_path, delimiter="\t", dtype=str)
-    recipe_label = np.genfromtxt(os.path.join(dataset_path, 'label.tsv'), delimiter="_", dtype=str)
-    recipe_ids = recipe_label[:, 0].tolist()
+    # this contains the code of the recipe and its name
+    recipe_info = np.genfromtxt(os.path.join(dataset_path, 'label.tsv'), delimiter="_", dtype=str)
+    # get recipes' codes
+    recipes_codes = recipe_info[:, 0].tolist()
     recipe_food_dict = {}
-    labels_list = []
+    foods_list = []
 
+    # recipe_food contains the recipe code and its food
     for recipe_food in recipe_food_map:
+        # check if the code of the current recipe is already present
         if recipe_food[0] in recipe_food_dict:
-            if recipe_food[0] in recipe_ids:
+            # if the code of the recipe exists
+            if recipe_food[0] in recipes_codes:
+                # add the food
                 recipe_food_dict[recipe_food[0]].append(recipe_food[2])
-                labels_list.append(recipe_food[2])
+                foods_list.append(recipe_food[2])
         else:
-            if recipe_food[0] in recipe_ids:
+            # if the code of the recipe exists
+            if recipe_food[0] in recipes_codes:
+                # set the first food
                 recipe_food_dict[recipe_food[0]] = [recipe_food[2]]
-                labels_list.append(recipe_food[2])
+                foods_list.append(recipe_food[2])
 
-    labels_list = list(set(labels_list))
-    labels_list.sort()
-    return recipe_food_dict, labels_list
+    recipe_food_dict = {idx: ingredients for idx, ingredients in enumerate(recipe_food_dict.values())}
+
+    foods_list = list(set(foods_list))
+    foods_list.sort()
+
+    return recipe_food_dict, foods_list
 
 
 if __name__ == "__main__":
@@ -66,17 +74,21 @@ if __name__ == "__main__":
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     seed = args.seed
     set_seed(seed)
-    print("Setting device {}".format(device))
-    print("Setting seed {}".format(seed))
+    print("\nSETTING DEVICE: {}".format(device))
+    print("SETTING SEED: {}".format(seed))
 
+    # get arguments passed by terminal
     data_dir = args.data_dir
     models_path = args.models_path
     model_name = args.model_name
     results_path = args.results_path
+    # type classifier --- multilabel (default) or multiclass
     type_classifier = args.type_classifier
+    # conf number of the configuration to use
     conf_number = args.conf_number
     patience = args.patience
-    hps_count = args.n_configs
+    # number of configurations to try for hyperparameters selections
+    max_hps = args.n_configs
 
     wandb_config = load_config(type_classifier, conf_number)
     create_val_set(data_dir)
@@ -87,12 +99,11 @@ if __name__ == "__main__":
     test_dir = os.path.join(data_dir, 'test')
 
     current_model_dir, current_results_dir, exp_name = create_dirs(models_path, results_path, type_classifier, seed)
-    recipe_food_dict, labels_list = build_labels_dict(data_dir, recipe_food_map)
-    recipe_food_dict = {idx: ingredients for idx, ingredients in enumerate(recipe_food_dict.values())}
+    recipe_food_dict, foods_list = build_labels_dict(data_dir, recipe_food_map)
 
     results_tracker = []
-    tuning_hps(device, exp_name, type_classifier, recipe_food_dict, labels_list, model_name, train_dir,
-                              valid_dir, current_model_dir, patience, wandb_config, hps_count, results_tracker)
+    tuning_hps(device, exp_name, type_classifier, recipe_food_dict, foods_list, model_name, train_dir, valid_dir,
+               current_model_dir, patience, wandb_config, max_hps, results_tracker)
 
     # Store data (serialize)
     with open(current_results_dir + "results_tracks.pkl", 'wb') as pickle_f:
