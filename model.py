@@ -274,10 +274,11 @@ class EarlyStopping:
         This class implements early stopping
     """
 
-    def __init__(self, model_dir, patience=5):
+    def __init__(self, model_dir, patience=5, delta=0.1):
 
         self.model_dir = model_dir
         self.patience = patience
+        self.delta = delta
         self.best_epoch = -1
         self.min_loss = None
         self.counter = 0
@@ -287,7 +288,7 @@ class EarlyStopping:
 
         if self.min_loss is None:
             self.save_ckp(epoch, val_loss, model)
-        elif val_loss < self.min_loss:
+        elif val_loss < (self.min_loss - self.delta):
             # reset counter and save new model
             self.counter = 0
             self.save_ckp(epoch, val_loss, model)
