@@ -67,6 +67,7 @@ if __name__ == "__main__":
     parser.add_argument("-type_classifier", type=str, default="multilabel", help="accepted values only: ['multiclass', 'multilabel']")
     parser.add_argument("-conf_number", type=int, default=0)
     parser.add_argument("-patience", type=int, default=1)
+    parser.add_argument("-min_delta", type=float, default=0.01)
     parser.add_argument("-n_configs", type=int, default=2, help="number of hps' configs to try")
 
     args = parser.parse_args()
@@ -86,6 +87,7 @@ if __name__ == "__main__":
     type_classifier = args.type_classifier
     # conf number of the configuration to use
     conf_number = args.conf_number
+    min_delta = args.min_delta
     patience = args.patience
     # number of configurations to try for hyperparameters selections
     max_hps = args.n_configs
@@ -103,7 +105,7 @@ if __name__ == "__main__":
 
     results_tracker = []
     tuning_hps(device, exp_name, type_classifier, recipe_food_dict, foods_list, model_name, train_dir, valid_dir,
-               current_model_dir, patience, wandb_config, max_hps, results_tracker)
+               current_model_dir, min_delta, patience, wandb_config, max_hps, results_tracker)
 
     # Store data (serialize)
     with open(current_results_dir + "results_tracks.pkl", 'wb') as pickle_f:
