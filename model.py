@@ -121,7 +121,7 @@ def train(
             optimizer.step()
 
             print("Batch {}/{} --- loss = {:.3f}".format(idx_batch + 1, num_train_batches, batch_loss))
-            break
+
 
         if type_classifier == "multiclass":
             val_loss = eval_model(device, model, loss_function, validation_loader, type_classifier)
@@ -263,7 +263,7 @@ def eval_model(
             x_batch, y_batch = x_batch.to(device), y_batch.to(device)
             outputs = model(x_batch)
             test_loss += loss_function(outputs, y_batch)
-            break
+
     return test_loss/len(test_loader)
 
 
