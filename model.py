@@ -64,8 +64,8 @@ def initialize_model(model_name, num_classes):
 
 
 def train(
-        device, model, epochs, loss_function, learning_rate, patience, train_loader, validation_loader, type_classifier,
-        current_model_dir, recipe_food_dict, unique_food_class_dict, y_batch_multilabel):
+        device, model, epochs, loss_function, learning_rate, min_delta, patience, train_loader, validation_loader,
+        type_classifier, current_model_dir, recipe_food_dict, unique_food_class_dict, y_batch_multilabel):
     """
         Train the model
 
@@ -74,7 +74,8 @@ def train(
         :param epochs: number of epoch to train
         :param loss_function: loss
         :param learning_rate: learning rate
-        :param patience: patiece (early stopping)
+        :param min_delta: min delta variation for the val loss (early stopping)
+        :param patience: patience (early stopping)
         :param train_loader: train dataloader
         :param validation_loader: validation dataloader
         :param type_classifier: type of classifier (multilabel or multiclass)
@@ -92,7 +93,7 @@ def train(
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-    earlystopping = EarlyStopping(current_model_dir, patience)
+    earlystopping = EarlyStopping(current_model_dir, patience, min_delta)
 
     for epoch in range(1, epochs + 1):
         print('Epoch {}/{}'.format(epoch, epochs))
@@ -120,7 +121,7 @@ def train(
             optimizer.step()
 
             print("Batch {}/{} --- loss = {:.3f}".format(idx_batch + 1, num_train_batches, batch_loss))
-            break
+
 
         if type_classifier == "multiclass":
             val_loss = eval_model(device, model, loss_function, validation_loader, type_classifier)
@@ -147,7 +148,7 @@ def train(
 
 
 def tuning_hps(device, exp_name, type_classifier, recipe_food_dict, foods_list, model_name, train_dir, valid_dir,
-               current_model_dir, patience, wandb_config, max_hps, results_tracker
+               current_model_dir, min_delta, patience, wandb_config, max_hps, results_tracker
     ):
     """
         Hyperparameters selection
@@ -161,6 +162,7 @@ def tuning_hps(device, exp_name, type_classifier, recipe_food_dict, foods_list, 
         :param train_dir: train dir
         :param valid_dir: validation dir
         :param current_model_dir: dir where to save model
+        :param min_delta: min delta variation for the val loss (early stopping)
         :param patience: patience (early stopping)
         :param wandb_config: hps using wandb
         :param max_hps: max number of configuration to try for hps
@@ -214,7 +216,7 @@ def tuning_hps(device, exp_name, type_classifier, recipe_food_dict, foods_list, 
             model = model.to(device)
 
             best_epoch, min_loss = train(
-                device, model, epochs, loss_function, learning_rate, patience, train_loader, validation_loader,
+                device, model, epochs, loss_function, learning_rate, min_delta, patience, train_loader, validation_loader,
                 type_classifier, current_model_dir_hps, recipe_food_dict,  unique_food_class_dict, y_batch_multilabel
             )
 
@@ -261,7 +263,7 @@ def eval_model(
             x_batch, y_batch = x_batch.to(device), y_batch.to(device)
             outputs = model(x_batch)
             test_loss += loss_function(outputs, y_batch)
-            break
+
     return test_loss/len(test_loader)
 
 
@@ -274,7 +276,7 @@ class EarlyStopping:
         This class implements early stopping
     """
 
-    def __init__(self, model_dir, patience=5, delta=0.1):
+    def __init__(self, model_dir, patience=5, delta=0.01):
 
         self.model_dir = model_dir
         self.patience = patience
