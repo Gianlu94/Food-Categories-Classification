@@ -62,7 +62,7 @@ if __name__ == "__main__":
     parser.add_argument("-seed", type=int, default=0)
     parser.add_argument("-data_dir", type=str, default="./data/FFoCat")
     parser.add_argument("-models_path", type=str, default="./models")
-    parser.add_argument("-model_name", type=str, default="EFFICIENTNETB0")
+    parser.add_argument("-model_name", type=str, default="EFFICIENTNETB0-pre")
     parser.add_argument("-results_path", type=str, default="./results")
     parser.add_argument("-type_classifier", type=str, default="multilabel", help="accepted values only: ['multiclass', 'multilabel']")
     parser.add_argument("-conf_number", type=int, default=0)

@@ -52,9 +52,14 @@ def initialize_model(model_name, num_classes):
 
     model = None
 
-    if model_name == "EFFICIENTNETB0":
+    # load pretrained or not pretrained model
+    if model_name == "EFFICIENTNETB0-pre":
         model = models.efficientnet_b0(weights=EfficientNet_B0_Weights.DEFAULT)
+    elif model_name == "EFFICIENTNETB0-scratch":
+        model = models.efficientnet_b0()
 
+    # modify last layers
+    if "EFFICIENTNET" in model_name:
         model.classifier = torch.nn.Sequential(
             torch.nn.Dropout(0.2),
             torch.nn.Linear(1280, num_classes)
