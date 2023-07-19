@@ -332,7 +332,6 @@ def compute_metrics_foods(device, split, data_generator, num_classes, type_class
                 y_pred_stack = np.vstack((y_pred_stack, outputs))
 
             y_true_stack = np.vstack((y_true_stack, y_batch))
-            if idx_batch==2:break
 
     precision = dict()
     recall = dict()
@@ -369,10 +368,10 @@ if __name__ == "__main__":
     parser.add_argument("-data_dir", type=str, default="./data/FFoCat/")
     parser.add_argument("-model_path", type=str, default="./models")
     parser.add_argument("-plot_path", type=str, default="./results/plot/")
-    parser.add_argument("-model_name", type=str, default="EFFICIENTNETB0")
+    parser.add_argument("-model_name", type=str, default="EFFICIENTNETB0-pre")
     parser.add_argument("-type_classifier", type=str, default="multilabel", help="accepted values only: ['multiclass', 'multilabel']")
     parser.add_argument("-split", type=str, default="test")
-    parser.add_argument("-n_max_imgs", type=int, default=10, help="maximum bnumber of imgs to plot")
+    parser.add_argument("-n_max_imgs", type=int, default=10, help="maximum number of imgs to plot")
     parser.add_argument("-batch_size", type=int, default=1)
     parser.add_argument("-threshold", type=float, default=0.5)
     parser.add_argument("-compute", type=str, default="all", help="what to compute options = (metrics, samples)")
@@ -421,6 +420,7 @@ if __name__ == "__main__":
 
     model = model.to(device)
 
+    print("[INFO] Model: " + model_name)
     print("[INFO] Loading model: " + model_path)
 
     model.load_state_dict(torch.load(model_path))
