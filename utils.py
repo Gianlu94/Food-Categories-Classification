@@ -39,10 +39,16 @@ def load_config(type_classifier, num_conf):
         if num_conf == 0:
             print("LOADING CONFIG: conf_multilabel_0")
             return config.CONF_MULTILABEL_0
+        elif num_conf == 1:
+            print("LOADING CONFIG: conf_multilabel_1")
+            return config.CONF_MULTILABEL_1
     elif type_classifier == "multiclass":
         if num_conf == 0:
             print("LOADING CONFIG: conf_multiclass_0")
             return config.CONF_MULTICLASS_0
+        elif num_conf == 1:
+            print("LOADING CONFIG: conf_multiclass_1")
+            return config.CONF_MULTICLASS_1
 
 
 def create_dirs(model_dir, results_dir, type_classifier, seed):
