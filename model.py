@@ -58,6 +58,8 @@ def initialize_model(model_name, num_classes):
     elif model_name == "EFFICIENTNETB0-scratch":
         model = models.efficientnet_b0()
 
+    print("USING MODEL: " + model_name)
+
     # modify last layers
     if "EFFICIENTNET" in model_name:
         model.classifier = torch.nn.Sequential(
