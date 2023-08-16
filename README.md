@@ -64,44 +64,50 @@ If you use FFoCat in your research, please use the following BibTeX entry.
 ## Using the Source Code
 
 - The `models` folder will contain the multiclass and multilabel models after the training;
-- The `history` folder will contain the accuracies and losses of the multiclass and multilabel models after the training;
-- The `results` folder will contain the precision-recall curves results for the trained models after the evaluation.
+- The `results` folder will contain the precision-recall curves results and the multilabel confusion matrix for the trained models after the evaluation.
 
 **Requirements**
 
 We train and test the models with the following software configuration. However, more recent versions of the libraries could also work:
 
-- Ubuntu 14.04;
-- Python 2.7.6;
-- Keras 2.1.3;
-- TensorFlow 1.4.0;
-- Numpy 1.13.1;
-- Scikit-learn 0.18.1;
-- Matplotlib 1.5.1;
+- Ubuntu 18.04;
+- Python 3.10.11;
+- Pytorch 2.0.1;
+- Numpy 1.24.3;
+- Scikit-learn 1.2.2;
+- Pandas 2.0.3;
+- Matplotlib 3.7.1;
+
+To replicate the same environment, install and then activate the food env:
+
+```
+conda env create -f food-env.yml
+
+conda activate food-env
+```
+
+Since hyperparameters selection is done using Weights & Biases, you should also create an account on the [website](https://docs.wandb.ai/?_gl=1*oblmn0*_ga*NjEyMTg0OTk4LjE2ODkwOTAyNjk.*_ga_JH1SJHJQXJ*MTY5MjE3NDE4Ny4xNy4xLjE2OTIxNzQyNDEuNi4wLjA).
 
 **Training a model**
 
-Before training a model set in `food_category_classification.py` the following variables:
-
-- `TYPE_CLASSIFIER` if you want to train the multiclass or multilabel model. It takes the values `multiclass` or `multilabel`;
-- `DATA_DIR` that is your local path to the `FFoCat` folder.
+Training is done by loading configurations defined in config.py. To try new configurations, edit that file.
 
 To run a train use the following command
+
 ```
-python food_category_classification.py
+python food_category_classification.py -type_classifier <type_classifies> -conf_number <conf_number>  
 ```
+
+where `type classifier` takes the value `multilabel` (default) or `multiclass` and `conf_number` specifies the number of configuration to load from config.py. For more info about the other arguments, take a look at the comments inside the code.
+
 Models will be saved in the `models` folder.
 
 **Evaluating a model**
 
-Before evaluating a model set in `evaluation_classifier.py` the following variables:
+To run the evaluation for the trained model, use the following command
 
-- `TYPE_CLASSIFIER` if you want to test the multiclass or multilabel model. It takes the values `multiclass` or `multilabel`;
-- `DATA_DIR` as above;
-- `USE_PREDICTION_SCORE` useful only for the multiclass classification. If you want to use the classification score for the inferred food category labels set it to `True`, `False` otherwise.
+```
+python evaluation_classifier.py -type_classifier <type_classifier> -model_path <model_path> -plot_path <plot_path> -compute metrics
+```
 
-To run the evaluation use the following command
-```
-python evaluation_classifier.py
-```
 Results will be saved in the `results` folder.
