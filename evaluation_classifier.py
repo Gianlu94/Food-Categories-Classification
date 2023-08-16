@@ -94,7 +94,6 @@ def plot_img_recipes(plot_path, model_name, n_imgs, recipes_imgs, y_gt_recipes, 
     """
 
     # earlystopping delta, cpu tensor
-
     foods_list = np.array(foods_list)
     for i in range(n_imgs):
         # get gt recipe name
@@ -187,13 +186,13 @@ def plot_pred(plot_path, model, model_name, data_loader, n_max_imgs, recipe_list
                 # that compose it
                 get_foods_score(outputs, y_pred_foods, recipe_food_dict, unique_food_class_map)
             else:
-                y_pred_foods = y_pred_foods > threshold
+                y_pred_foods = outputs > threshold
 
             # stack imgs
             if x_stack is None:
                 x_stack = np.empty((0, x_batch.shape[1], x_batch.shape[2], x_batch.shape[3]))
-            else:
-                x_stack = np.vstack((x_stack, x_batch))
+
+            x_stack = np.vstack((x_stack, x_batch))
 
             y_gt_recipes_stack = np.hstack((y_gt_recipes_stack, y_batch_gt_recipes))
             y_gt_foods_stack = np.vstack((y_gt_foods_stack, y_batch_gt_foods))
@@ -413,8 +412,10 @@ if __name__ == "__main__":
     # preprocessing data
     transform = preprocess_data(model_name)
 
+    print(data_dir_split)
+
     data_generator = torchvision.datasets.ImageFolder(data_dir_split, transform=transform)
-    data_loader = DataLoader(data_generator, batch_size=batch_size)
+    data_loader = DataLoader(data_generator, batch_size=batch_size, shuffle=True)
 
     model = initialize_model(model_name, num_classes)
 
@@ -423,7 +424,7 @@ if __name__ == "__main__":
     print("[INFO] Model: " + model_name)
     print("[INFO] Loading model: " + model_path)
 
-    model.load_state_dict(torch.load(model_path))
+    model.load_state_dict(torch.load(model_path,  map_location=device))
 
     if compute == "metrics":
 
