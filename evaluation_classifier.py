@@ -365,16 +365,16 @@ if __name__ == "__main__":
     # load model and evalute it
     parser = argparse.ArgumentParser(prog='Food test', description="")
 
-    parser.add_argument("-data_dir", type=str, default="./data/FFoCat/")
-    parser.add_argument("-model_path", type=str, default="./models")
-    parser.add_argument("-plot_path", type=str, default="./results/plot/")
-    parser.add_argument("-model_name", type=str, default="EFFICIENTNETB0-pre")
-    parser.add_argument("-type_classifier", type=str, default="multilabel", help="accepted values only: ['multiclass', 'multilabel']")
-    parser.add_argument("-split", type=str, default="test")
-    parser.add_argument("-n_max_imgs", type=int, default=10, help="maximum number of imgs to plot")
+    parser.add_argument("-data_dir", type=str, help="path to dataset", default="./data/FFoCat/")
+    parser.add_argument("-model_path", type=str, help="path to model to load", default="./models")
+    parser.add_argument("-plot_path", type=str, help="path where to save models", default="./results/plot/")
+    parser.add_argument("-model_name", type=str, help="model to use", default="EFFICIENTNETB0-pre")
+    parser.add_argument("-type_classifier", type=str, help="accepted values only: ['multiclass', 'multilabel']", default="multilabel")
+    parser.add_argument("-split", type=str, help="partition to evaluate", default="test")
+    parser.add_argument("-n_max_imgs", type=int, help="maximum number of imgs to plot", default=10)
     parser.add_argument("-batch_size", type=int, default=1)
-    parser.add_argument("-threshold", type=float, default=0.5)
-    parser.add_argument("-compute", type=str, default="all", help="what to compute options = (metrics, samples)")
+    parser.add_argument("-threshold", type=float, help="threshold use for multilabel", default=0.5)
+    parser.add_argument("-compute", type=str, help="what to compute, options = (metrics, samples)", default="metrics")
 
     args = parser.parse_args()
 

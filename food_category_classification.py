@@ -59,16 +59,16 @@ def build_labels_dict(dataset_path, recipe_food_map_path):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='Food train', description='Arguments related to training')
 
-    parser.add_argument("-seed", type=int, default=0)
-    parser.add_argument("-data_dir", type=str, default="./data/FFoCat")
-    parser.add_argument("-models_path", type=str, default="./models")
-    parser.add_argument("-model_name", type=str, default="EFFICIENTNETB0-pre")
-    parser.add_argument("-results_path", type=str, default="./results")
-    parser.add_argument("-type_classifier", type=str, default="multilabel", help="accepted values only: ['multiclass', 'multilabel']")
-    parser.add_argument("-conf_number", type=int, default=0)
-    parser.add_argument("-patience", type=int, default=1)
-    parser.add_argument("-min_delta", type=float, default=0.01)
-    parser.add_argument("-n_configs", type=int, default=2, help="number of hps' configs to try")
+    parser.add_argument("-seed", type=int, help="seed for experiments", default=0)
+    parser.add_argument("-data_dir", type=str, help="path to dataset", default="./data/FFoCat")
+    parser.add_argument("-models_path", type=str, help="path where to save models", default="./models")
+    parser.add_argument("-model_name", type=str, help="model to use", default="EFFICIENTNETB0-pre")
+    parser.add_argument("-results_path", type=str, help="path where to save results", default="./results")
+    parser.add_argument("-type_classifier", type=str,  help="accepted values only: ['multiclass', 'multilabel']", default="multilabel")
+    parser.add_argument("-conf_number", type=int, help="number of configuration to load", default=0)
+    parser.add_argument("-patience", type=int, help="patience - earlystopping", default=1)
+    parser.add_argument("-min_delta", type=float, help="min delta - earlystopping",  default=0.01)
+    parser.add_argument("-n_configs", type=int, default=2,  help="number of hps configs to try")
 
     args = parser.parse_args()
 
