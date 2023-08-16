@@ -80,7 +80,7 @@ We train and test the models with the following software configuration. However,
 
 To replicate the same environment, install and then activate the food env:
 
-```
+```bash
 conda env create -f food-env.yml
 
 conda activate food-env
@@ -90,24 +90,30 @@ Since hyperparameters selection is done using Weights & Biases, you should also 
 
 **Training a model**
 
-Training is done by loading configurations defined in config.py. To try new configurations, edit that file.
+Training is done by loading configurations defined in `config.py`. To try new configurations, edit that file.
 
 To run a train use the following command
 
-```
+```python
 python food_category_classification.py -type_classifier <type_classifies> -conf_number <conf_number>  
 ```
 
-where `type classifier` takes the value `multilabel` (default) or `multiclass` and `conf_number` specifies the number of configuration to load from config.py. For more info about the other arguments, take a look at the comments inside the code.
+where `type classifier` takes the value `multilabel` (default) or `multiclass` and `conf_number` specifies the number of configuration to load from `config.py`. For more info about the other arguments, take a look at the comments inside the code.
 
 Models will be saved in the `models` folder.
 
 **Evaluating a model**
 
-To run the evaluation for the trained model, use the following command
+To compute metrics, use the following command
 
-```
+```python
 python evaluation_classifier.py -type_classifier <type_classifier> -model_path <model_path> -plot_path <plot_path> -compute metrics
+```
+
+To get a random (visual) sample of imgs of recipes and foods, use the following command
+
+```python
+python evaluation_classifier.py -type_classifier <type_classifier> -model_path <model_path> -plot_path <plot_path> -compute samples
 ```
 
 Results will be saved in the `results` folder.
